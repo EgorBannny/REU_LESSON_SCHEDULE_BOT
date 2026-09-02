@@ -5,8 +5,10 @@ description = "REU LESSON SCHEDULE (@REU_LESSON_SCHEDULE_BOT) — Telegram-бо�
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiogram>=3.31.0",
     "beautifulsoup4>=4.15.0",
     "httpx>=0.28.1",
     "lxml>=6.1.3",
     "pillow>=12.3.0",
+    "python-dotenv>=1.2.3",
 ]

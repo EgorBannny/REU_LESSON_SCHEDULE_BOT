@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from .models import DaySchedule, day_from_dict, day_to_dict
@@ -29,12 +29,18 @@ CREATE TABLE IF NOT EXISTS days (
     first_seen_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    telegram_id INTEGER PRIMARY KEY,
+    group_name TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
 def connect(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
-    conn.execute(_SCHEMA)
+    conn.executescript(_SCHEMA)
     conn.commit()
     return conn
 
@@ -99,3 +105,38 @@ def refresh_from_source(conn: sqlite3.Connection, url: str = SPARTAKOVSKAYA_SPO_
     html = fetch_html(url)
     days = parse_schedule(html)
     return save_days(conn, days)
+
+
+def is_stale(conn: sqlite3.Connection, max_age_minutes: int = 15) -> bool:
+    """Пуст ли кэш или последнее обновление было раньше, чем max_age_minutes назад."""
+    row = conn.execute("SELECT MAX(updated_at) FROM days").fetchone()
+    if row is None or row[0] is None:
+        return True
+    last_updated = datetime.fromisoformat(row[0])
+    return datetime.now() - last_updated > timedelta(minutes=max_age_minutes)
+
+
+def ensure_fresh(
+    conn: sqlite3.Connection, url: str = SPARTAKOVSKAYA_SPO_URL, max_age_minutes: int = 15
+) -> list[date]:
+    """Обновляет кэш из источника, только если он пуст или устарел. Возвращает изменившиеся даты."""
+    if not is_stale(conn, max_age_minutes):
+        return []
+    return refresh_from_source(conn, url)
+
+
+def get_user_group(conn: sqlite3.Connection, telegram_id: int) -> str | None:
+    row = conn.execute(
+        "SELECT group_name FROM users WHERE telegram_id = ?", (telegram_id,)
+    ).fetchone()
+    return row[0] if row else None
+
+
+def set_user_group(conn: sqlite3.Connection, telegram_id: int, group_name: str) -> None:
+    now = datetime.now().isoformat()
+    conn.execute(
+        "INSERT INTO users (telegram_id, group_name, updated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(telegram_id) DO UPDATE SET group_name = excluded.group_name, updated_at = excluded.updated_at",
+        (telegram_id, group_name, now),
+    )
+    conn.commit()

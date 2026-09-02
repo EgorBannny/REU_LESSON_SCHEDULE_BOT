@@ -13,3 +13,6 @@ wheels/
 schedule.db
 renders/
 
+# Secrets
+.env
+

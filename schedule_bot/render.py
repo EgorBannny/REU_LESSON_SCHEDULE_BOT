@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -129,15 +130,7 @@ def _measure_lesson_block_height(
     return blocks
 
 
-def render_group_card(
-    day: DaySchedule,
-    shift: ShiftSchedule,
-    group: GroupSchedule,
-    out_path: str | Path,
-) -> Path:
-    """Рендерит одну карточку расписания группы и сохраняет её как PNG."""
-    out_path = Path(out_path)
-
+def _build_group_image(day: DaySchedule, shift: ShiftSchedule, group: GroupSchedule) -> Image.Image:
     scratch_img = Image.new("RGB", (10, 10))
     scratch_draw = ImageDraw.Draw(scratch_img)
     content_width = _WIDTH - 2 * _MARGIN - 2 * _CARD_PAD
@@ -274,13 +267,31 @@ def render_group_card(
         fill=_TEXT_SECONDARY,
     )
 
+    return img
+
+
+def render_group_card(
+    day: DaySchedule,
+    shift: ShiftSchedule,
+    group: GroupSchedule,
+    out_path: str | Path,
+) -> Path:
+    """Рендерит одну карточку расписания группы и сохраняет её как PNG."""
+    out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out_path, "PNG")
+    _build_group_image(day, shift, group).save(out_path, "PNG")
     return out_path
 
 
+def render_group_card_bytes(day: DaySchedule, shift: ShiftSchedule, group: GroupSchedule) -> bytes:
+    """Рендерит карточку расписания группы и возвращает PNG в виде байтов (для отправки в Telegram)."""
+    buf = BytesIO()
+    _build_group_image(day, shift, group).save(buf, "PNG")
+    return buf.getvalue()
+
+
 def render_all_group_cards(day: DaySchedule, out_dir: str | Path) -> list[Path]:
-    """Рендерит по одной карточке на каждую группу этого дня."""
+    """Рендерит по одной карточке на каждую группу этого дня и сохраняет их как PNG."""
     out_dir = Path(out_dir)
     paths: list[Path] = []
     for shift in day.shifts:
@@ -289,3 +300,12 @@ def render_all_group_cards(day: DaySchedule, out_dir: str | Path) -> list[Path]:
             path = out_dir / f"{day.schedule_date.isoformat()}_{shift.shift_number}_{safe_name}.png"
             paths.append(render_group_card(day, shift, group, path))
     return paths
+
+
+def render_all_group_cards_bytes(day: DaySchedule) -> list[tuple[str, bytes]]:
+    """Рендерит карточки всех групп этого дня в память: [(название группы, PNG-байты), ...]."""
+    result: list[tuple[str, bytes]] = []
+    for shift in day.shifts:
+        for group in shift.groups:
+            result.append((group.group, render_group_card_bytes(day, shift, group)))
+    return result
