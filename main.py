@@ -1,29 +1,45 @@
-"""Демо Фазы 1: скачать и разобрать расписание, показать последние 2 дня.
+"""Демо Фаз 1-2: кэш расписания в SQLite + рендер картинок-карточек.
 
 Запуск: uv run main.py
 """
 
+from pathlib import Path
+
 from schedule_bot import BOT_NAME, __version__
-from schedule_bot.scraper import fetch_html, get_latest_days, parse_schedule
+from schedule_bot.render import render_all_group_cards, render_group_card
+from schedule_bot.storage import connect, get_latest_days, refresh_from_source
+
+DEMO_GROUP = "Б-111"
+RENDERS_DIR = Path(__file__).parent / "renders"
 
 
 def main() -> None:
-    print(f"{BOT_NAME} v{__version__} — демо парсера расписания")
+    print(f"{BOT_NAME} v{__version__} — демо")
 
-    html = fetch_html()
-    days = parse_schedule(html)
-    print(f"Найдено дней с расписанием: {len(days)}")
+    conn = connect()
+    changed = refresh_from_source(conn)
+    if changed:
+        print(f"Обновились/появились даты: {', '.join(d.isoformat() for d in changed)}")
+    else:
+        print("Новых данных нет, кэш уже актуален")
 
-    for day in get_latest_days(days, count=2):
-        print(f"\n=== {day.schedule_date.strftime('%d.%m.%Y')} ({day.weekday}) ===")
-        for shift in day.shifts:
-            print(f"-- {shift.shift_number} смена, {shift.location}, дежурный: {shift.duty_teacher}")
-            for group in shift.groups:
-                print(f"  Группа {group.group}:")
-                for lesson in group.lessons:
-                    if lesson.is_empty:
-                        continue
-                    print(f"    {lesson.number}. {lesson.time} — {' / '.join(lesson.lines)}")
+    days = get_latest_days(conn, count=2)
+    print(f"В кэше последние {len(days)} дня(ей) с расписанием:")
+    for day in days:
+        print(f"  {day.schedule_date} ({day.weekday})")
+
+    if not days:
+        return
+    latest = days[-1]
+
+    found = latest.find_group_with_shift(DEMO_GROUP)
+    if found:
+        shift, group = found
+        path = render_group_card(latest, shift, group, RENDERS_DIR / f"{DEMO_GROUP}.png")
+        print(f"Карточка группы {DEMO_GROUP}: {path}")
+
+    all_paths = render_all_group_cards(latest, RENDERS_DIR / "all")
+    print(f"Карточки всех групп ({len(all_paths)} шт.) в: {RENDERS_DIR / 'all'}")
 
 
 if __name__ == "__main__":
