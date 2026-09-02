@@ -174,43 +174,60 @@ def _parse_block(rows: list[Tag]) -> DaySchedule:
     return DaySchedule(schedule_date=day_date, weekday=weekday, shifts=shifts)
 
 
+_GROUP_BLOCK_SIZE = 4
+
+
 def _fill_shift_groups(
     shift: ShiftSchedule,
     group_col: int,
     cols: list[tuple[int, int, str]],
     data_rows: list[Tag],
 ) -> None:
-    current_group: str | None = None
-    current_lines: dict[int, list[str]] = {}
+    """Разбирает строки данных смены на группы фиксированными блоками по 4 строки.
 
-    def flush() -> None:
-        if current_group is None:
-            return
+    Каждая группа в исходной таблице занимает ровно 4 строки: 1-2 строки
+    предмета (если он не уместился в одну), затем преподаватель(и), затем
+    аудитория(и). Колонка с названием группы при этом человеком иногда
+    заполняется на первой строке блока, а иногда — на второй (когда предмет
+    предыдущей группы не потребовал переноса и освободил место раньше).
+    Поэтому группа определяется по коду в первой ИЛИ второй строке блока, а
+    не по самому факту его появления — это не даёт первой строке предмета
+    "уехать" в предыдущую группу.
+    """
+    row_texts: list[tuple[str, dict[int, str]]] = []
+    for row in data_rows:
+        cells = _row_cells(row)
+        group_text = _cell_text(cells[group_col]) if group_col < len(cells) else ""
+        lesson_texts = {}
+        for abs_col, _num, _time in cols:
+            if abs_col < len(cells):
+                text = _cell_text(cells[abs_col])
+                if text:
+                    lesson_texts[abs_col] = text
+        row_texts.append((group_text, lesson_texts))
+
+    for start in range(0, len(row_texts), _GROUP_BLOCK_SIZE):
+        chunk = row_texts[start : start + _GROUP_BLOCK_SIZE]
+
+        group_name = None
+        for row_group_text, _ in chunk[:2]:
+            if row_group_text and _GROUP_CODE_RE.match(row_group_text):
+                group_name = row_group_text
+                break
+        if group_name is None:
+            continue
+
+        current_lines: dict[int, list[str]] = {}
+        for _, lesson_texts in chunk:
+            for col, text in lesson_texts.items():
+                current_lines.setdefault(col, []).append(text)
+
         lessons = [
             Lesson(number=num, time=time, lines=current_lines.get(abs_col, []))
             for abs_col, num, time in cols
         ]
         if any(not lesson.is_empty for lesson in lessons):
-            shift.groups.append(GroupSchedule(group=current_group, lessons=lessons))
-
-    for row in data_rows:
-        cells = _row_cells(row)
-        if group_col >= len(cells):
-            continue
-        group_text = _cell_text(cells[group_col])
-        if group_text and _GROUP_CODE_RE.match(group_text):
-            flush()
-            current_group = group_text
-            current_lines = {}
-        if current_group is None:
-            continue
-        for abs_col, _num, _time in cols:
-            if abs_col >= len(cells):
-                continue
-            text = _cell_text(cells[abs_col])
-            if text:
-                current_lines.setdefault(abs_col, []).append(text)
-    flush()
+            shift.groups.append(GroupSchedule(group=group_name, lessons=lessons))
 
 
 def get_latest_days(days: list[DaySchedule], count: int = 2) -> list[DaySchedule]:

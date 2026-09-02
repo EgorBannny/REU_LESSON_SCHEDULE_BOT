@@ -8,12 +8,14 @@
 
 from __future__ import annotations
 
+import re
 from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .models import DaySchedule, GroupSchedule, ShiftSchedule
+from . import BOT_NAME
+from .models import DaySchedule, GroupSchedule, Lesson, ShiftSchedule
 
 _FONTS_DIR = Path(__file__).parent / "assets" / "fonts"
 
@@ -43,6 +45,46 @@ _RU_MONTHS_NOM = {
     1: "ЯНВАРЯ", 2: "ФЕВРАЛЯ", 3: "МАРТА", 4: "АПРЕЛЯ", 5: "МАЯ", 6: "ИЮНЯ",
     7: "ИЮЛЯ", 8: "АВГУСТА", 9: "СЕНТЯБРЯ", 10: "ОКТЯБРЯ", 11: "НОЯБРЯ", 12: "ДЕКАБРЯ",
 }
+
+# Строки-"мусор" из подвала исходной таблицы (подпись зам. директора и т.п.),
+# которые физически попадают в ячейки последней группы на листе и не имеют
+# отношения к самому занятию — их просто выбрасываем.
+_NOISE_RE = re.compile(r"Зам\.?\s*директора|подпись|_{3,}", re.IGNORECASE)
+# Строка вида "Фамилия И.О." (возможно с приклеенной без пробела аудиторией) — преподаватель.
+_TEACHER_RE = re.compile(r"^[А-ЯЁ][а-яё]+(-[А-ЯЁ][а-яё]+)?\s+[А-ЯЁ]\.\s?[А-ЯЁ]\.")
+# Строка с номером аудитории/зала.
+_ROOM_RE = re.compile(r"ауд\.|зал\b|кабинет", re.IGNORECASE)
+
+
+def _split_lesson_lines(lesson: Lesson) -> tuple[str, list[str]]:
+    """Разбирает сырые строки пары на (полный текст предмета, [препод/ауд/...]).
+
+    Предмет в исходной таблице нередко переносится на 2-3 отдельные строки
+    (переполнение ячейки), а следом идут преподаватель и аудитория — тоже
+    отдельными строками. Здесь строки предмета склеиваются в одну, пока не
+    встретится строка, похожая на ФИО преподавателя или аудиторию.
+    """
+    clean = [line for line in lesson.lines if not _NOISE_RE.search(line)]
+
+    subject_parts: list[str] = []
+    rest: list[str] = []
+    for line in clean:
+        if not rest and not _TEACHER_RE.match(line) and not _ROOM_RE.search(line):
+            subject_parts.append(line)
+        else:
+            rest.append(line)
+
+    # Всё, что идёт после строки с аудиторией, на практике почти всегда —
+    # "уехавший" на одну строку фрагмент СЛЕДУЮЩЕЙ группы (та же причина,
+    # что и с подписью зам. директора): отбрасываем, чтобы не показывать
+    # чужой текст в карточке этой пары.
+    for i, line in enumerate(rest):
+        if _ROOM_RE.search(line):
+            rest = rest[: i + 1]
+            break
+
+    subject = " ".join(subject_parts)
+    return subject, rest
 
 
 def _font(name: str, size: int) -> ImageFont.FreeTypeFont:
@@ -122,9 +164,9 @@ def _measure_lesson_block_height(
     for lesson in group.lessons:
         if lesson.is_empty:
             continue
-        subject = lesson.subject or ""
-        subject_lines = _wrap_text(draw, subject, subject_font, text_width, max_lines=2)
-        detail_text = " · ".join(lesson.details)
+        subject, rest = _split_lesson_lines(lesson)
+        subject_lines = _wrap_text(draw, subject, subject_font, text_width, max_lines=2) if subject else []
+        detail_text = " · ".join(rest)
         detail_lines = _wrap_text(draw, detail_text, detail_font, text_width - 26, max_lines=1) if detail_text else []
         blocks.append((lesson, subject_lines, detail_lines))
     return blocks
@@ -154,12 +196,14 @@ def _build_group_image(day: DaySchedule, shift: ShiftSchedule, group: GroupSched
     x = _MARGIN
     y = _MARGIN
 
-    draw.text((x, y), "REU", font=_f_bold(40), fill=_TEXT_PRIMARY)
-    reu_w = draw.textlength("REU", font=_f_bold(40))
-    draw.text((x + reu_w, y), ".", font=_f_bold(40), fill=_ACCENT)
-    dot_w = draw.textlength(".", font=_f_bold(40))
-    draw.text((x + reu_w + dot_w, y), "Schedule", font=_f_bold(40), fill=_TEXT_PRIMARY)
-    draw.text((x + 2, y + 54), "Р А С П И С А Н И Е   З А Н Я Т И Й", font=_f_regular(14), fill=_TEXT_SECONDARY)
+    logo_font = _f_bold(34)
+    logo_first, _, logo_rest = BOT_NAME.partition(" ")
+    draw.text((x, y), logo_first, font=logo_font, fill=_TEXT_PRIMARY)
+    first_w = draw.textlength(logo_first, font=logo_font)
+    draw.text((x + first_w, y), ".", font=logo_font, fill=_ACCENT)
+    dot_w = draw.textlength(".", font=logo_font)
+    draw.text((x + first_w + dot_w, y), logo_rest, font=logo_font, fill=_TEXT_PRIMARY)
+    draw.text((x + 2, y + 48), "Р А С П И С А Н И Е   З А Н Я Т И Й", font=_f_regular(14), fill=_TEXT_SECONDARY)
 
     date_str = str(day.schedule_date.day)
     date_font = _f_bold(56)

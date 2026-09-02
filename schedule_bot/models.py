@@ -14,14 +14,6 @@ class Lesson:
     def is_empty(self) -> bool:
         return not self.lines
 
-    @property
-    def subject(self) -> str | None:
-        return self.lines[0] if self.lines else None
-
-    @property
-    def details(self) -> list[str]:
-        return self.lines[1:]
-
 
 @dataclass
 class GroupSchedule:
