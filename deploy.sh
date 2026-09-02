@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cd ~/
+cd ~/REU_LESSON_SCHEDULE_BOT/
 
 echo "=== Обновление кода ==="
 cp .env /tmp/.env.backup 2>/dev/null || true
