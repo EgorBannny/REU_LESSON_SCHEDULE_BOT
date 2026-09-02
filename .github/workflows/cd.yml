@@ -1,0 +1,25 @@
+name: CD
+
+on:
+  push:
+    branches:
+         - main
+jobs:
+  deploy:
+    name: Деплой
+    runs-on: ubuntu-latest
+    steps:
+      - name: Выполнить деплой-скрипт на сервере
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          # Объявляем переменные, которые хотим передать на сервер
+          ALWAYSDATA_TOKEN: ${{ secrets.ALWAYSDATA_TOKEN }}
+          ACCOUNT_NAME: "ommm"
+          SERVICE_ID: "29790"
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Регистрируем эти переменные внутри SSH-экшена
+          envs: ALWAYSDATA_TOKEN,ACCOUNT_NAME,SERVICE_ID
+          script: bash ~/REU_LESSON_SCHEDULE_BOT/deploy.sh
