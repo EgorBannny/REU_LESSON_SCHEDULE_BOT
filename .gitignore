@@ -16,3 +16,5 @@ renders/
 # Secrets
 .env
 
+# IDE files
+.idea

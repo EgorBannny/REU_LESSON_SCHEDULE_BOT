@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: schedule
+      POSTGRES_PASSWORD: schedule
+      POSTGRES_DB: schedule
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U schedule"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  poller:
+    build: .
+    command: ["python", "poller.py"]
+    environment:
+      DATABASE_URL: postgresql://schedule:schedule@db:5432/schedule
+      POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bot:
+    build: .
+    command: ["python", "bot.py"]
+    environment:
+      DATABASE_URL: postgresql://schedule:schedule@db:5432/schedule
+      BOT_TOKEN: ${BOT_TOKEN}
+      NOTIFY_INTERVAL_SECONDS: ${NOTIFY_INTERVAL_SECONDS:-60}
+      NOTIFY_LOOKBACK_DAYS: ${NOTIFY_LOOKBACK_DAYS:-2}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

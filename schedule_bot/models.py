@@ -19,6 +19,7 @@ class Lesson:
 class GroupSchedule:
     group: str
     lessons: list[Lesson] = field(default_factory=list)
+    note: str | None = None  # заметка вида "занятия с 12.05" из колонки названия группы
 
 
 @dataclass
@@ -72,6 +73,7 @@ def day_to_dict(day: DaySchedule) -> dict:
                 "groups": [
                     {
                         "group": g.group,
+                        "note": g.note,
                         "lessons": [
                             {"number": l.number, "time": l.time, "lines": l.lines}
                             for l in g.lessons
@@ -97,6 +99,7 @@ def day_from_dict(data: dict) -> DaySchedule:
                 groups=[
                     GroupSchedule(
                         group=g["group"],
+                        note=g.get("note"),
                         lessons=[Lesson(**lesson) for lesson in g["lessons"]],
                     )
                     for g in shift["groups"]
