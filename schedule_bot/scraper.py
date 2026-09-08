@@ -66,7 +66,7 @@ def fetch_html(url: str = SPARTAKOVSKAYA_SPO_URL, timeout: float = 15.0) -> str:
     return response.text
 
 
-def _parse_ru_date(text: str) -> date:
+def _parse_ru_date(text: str, reference_date: date | None = None) -> date:
     match = _DAY_MONTH_YEAR_RE.search(text)
     if not match:
         raise ValueError(f"Не удалось разобрать дату: {text!r}")
@@ -74,7 +74,24 @@ def _parse_ru_date(text: str) -> date:
     month = _RU_MONTHS.get(month_name.lower())
     if month is None:
         raise ValueError(f"Неизвестный месяц: {month_name!r}")
-    return date(int(year), month, int(day))
+    return _closest_year_date(int(day), month, int(year), reference_date or date.today())
+
+
+def _closest_year_date(day: int, month: int, literal_year: int, reference_date: date) -> date:
+    """Число и месяц в источнике надёжны, а вот год иногда указан неверно —
+    например, "07 сентября 2025 г." для реально идущего 07.09.2026 (колледж
+    не поправил год в шаблоне). Подбираем ближайший к сегодняшней дате год
+    среди literal_year-1..literal_year+1, а не верим году дословно.
+    """
+    candidates = []
+    for year in (literal_year - 1, literal_year, literal_year + 1):
+        try:
+            candidates.append(date(year, month, day))
+        except ValueError:
+            continue
+    if not candidates:
+        raise ValueError(f"Некорректная дата: {day:02d}.{month:02d}.{literal_year}")
+    return min(candidates, key=lambda d: abs((d - reference_date).days))
 
 
 def _row_cells(row: Tag) -> list[Tag]:
@@ -218,7 +235,10 @@ def _fill_shift_groups(
             continue
 
         current_lines: dict[int, list[str]] = {}
-        for _, lesson_texts in chunk:
+        note_parts: list[str] = []
+        for row_group_text, lesson_texts in chunk:
+            if row_group_text and row_group_text != group_name and not _GROUP_CODE_RE.match(row_group_text):
+                note_parts.append(row_group_text)
             for col, text in lesson_texts.items():
                 current_lines.setdefault(col, []).append(text)
 
@@ -227,7 +247,8 @@ def _fill_shift_groups(
             for abs_col, num, time in cols
         ]
         if any(not lesson.is_empty for lesson in lessons):
-            shift.groups.append(GroupSchedule(group=group_name, lessons=lessons))
+            note = "; ".join(note_parts) if note_parts else None
+            shift.groups.append(GroupSchedule(group=group_name, lessons=lessons, note=note))
 
 
 def get_latest_days(days: list[DaySchedule], count: int = 2) -> list[DaySchedule]:
