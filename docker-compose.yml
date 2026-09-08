@@ -1,4 +1,13 @@
 services:
+
+  vless_vpn:
+    image: ghcr.io/sagernet/sing-box:v1.11.0
+    container_name: vless-vpn_client
+    restart: always
+    volumes:
+      - /etc/sing-box/config.json:/etc/sing-box/config.json
+    command: run -c /etc/sing-box/config.json
+
   db:
     image: postgres:16-alpine
     environment:
@@ -34,8 +43,11 @@ services:
       NOTIFY_INTERVAL_SECONDS: ${NOTIFY_INTERVAL_SECONDS:-60}
       NOTIFY_LOOKBACK_DAYS: ${NOTIFY_LOOKBACK_DAYS:-2}
     depends_on:
+      vless_vpn:
+        condition: service_started
       db:
         condition: service_healthy
+    network_mode: "service:vless_vpn"
     restart: unless-stopped
 
 volumes:

@@ -1,0 +1,9 @@
+services:
+  vless_vpn:
+    profiles:
+      - notstart
+  bot:
+    depends_on: !reset
+      db:
+        condition: service_healthy
+    network_mode: "bridge"

@@ -13,7 +13,7 @@ cp /tmp/.env.backup .env 2>/dev/null || echo "WARN: .env не найден в б
 
 echo "=== Перезапуск Бот-сервиса ==="
 echo "=== Перезапуск Docker-сервисов ==="
-dokcer compose up -d --build
+docker compose -f docker-compose.yml up -d --build
 
 echo "=== Очистка старых образов ==="
 docker image prune -f
