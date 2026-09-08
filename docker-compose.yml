@@ -40,6 +40,9 @@ services:
     environment:
       DATABASE_URL: postgresql://schedule:schedule@db:5432/schedule
       BOT_TOKEN: ${BOT_TOKEN}
+      HTTP_PROXY: "http://127.0.0.1:2080"
+      HTTPS_PROXY: "http://127.0.0.1:2080"
+      NO_PROXY: "db,localhost,127.0.0.1"
       NOTIFY_INTERVAL_SECONDS: ${NOTIFY_INTERVAL_SECONDS:-60}
       NOTIFY_LOOKBACK_DAYS: ${NOTIFY_LOOKBACK_DAYS:-2}
     depends_on:
