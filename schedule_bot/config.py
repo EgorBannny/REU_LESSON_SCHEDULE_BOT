@@ -10,6 +10,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://schedule:schedule@localhost:5432/schedule")
 
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY")
+
 # Опросник: как часто дёргать источник (минуты).
 POLL_INTERVAL_MINUTES = int(os.getenv("POLL_INTERVAL_MINUTES", "5"))
 

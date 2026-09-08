@@ -13,7 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
 from .. import db
-from ..config import BOT_TOKEN, DATABASE_URL
+from ..config import BOT_TOKEN, DATABASE_URL, TELEGRAM_PROXY
 from .handlers import router
 from .middlewares import ChatMemberTrackerMiddleware
 from .notifier import run_notifier
@@ -39,7 +39,15 @@ async def run() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot_kwargs = {"default": DefaultBotProperties(parse_mode=ParseMode.HTML)}
+
+    # Если прокси есть (на сервере), добавляем сессию в словарь
+    if TELEGRAM_PROXY:
+        bot_kwargs["session"] = AiohttpSession(proxy=TELEGRAM_PROXY)
+
+
+    bot = Bot(token=BOT_TOKEN, **bot_kwargs)
+
     dp = Dispatcher(storage=MemoryStorage())
     dp.message.outer_middleware(ChatMemberTrackerMiddleware())
     dp.include_router(router)

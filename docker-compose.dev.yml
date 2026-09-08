@@ -3,6 +3,8 @@ services:
     profiles:
       - notstart
   bot:
+    environment:
+      - TELEGRAM_PROXY =
     depends_on: !reset
       db:
         condition: service_healthy
