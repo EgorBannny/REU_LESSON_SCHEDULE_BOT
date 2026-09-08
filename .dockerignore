@@ -1,0 +1,10 @@
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.git
+.gitignore
+renders/
+schedule.db
+.env
+README.md

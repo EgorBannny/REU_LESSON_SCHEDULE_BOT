@@ -30,6 +30,10 @@ _TEXT_SECONDARY = (137, 150, 179)
 _TEXT_MUTED = (90, 102, 130)
 _CHIP_BG = (19, 33, 61)
 _DIVIDER = (28, 44, 74)
+_WARN_BG = (46, 36, 10)
+_WARN_BORDER = (138, 106, 22)
+_WARN_ACCENT = (240, 180, 60)
+_WARN_TEXT = (223, 205, 150)
 
 _WIDTH = 1200
 _MARGIN = 64
@@ -54,6 +58,21 @@ _NOISE_RE = re.compile(r"Зам\.?\s*директора|подпись|_{3,}", r
 _TEACHER_RE = re.compile(r"^[А-ЯЁ][а-яё]+(-[А-ЯЁ][а-яё]+)?\s+[А-ЯЁ]\.\s?[А-ЯЁ]\.")
 # Строка с номером аудитории/зала.
 _ROOM_RE = re.compile(r"ауд\.|зал\b|кабинет", re.IGNORECASE)
+# Время внутри заметки о группе, например "с 12.05" -> 12:05.
+_NOTE_TIME_RE = re.compile(r"(\d{1,2})[.:](\d{2})")
+
+
+def _format_note(note: str) -> tuple[str, str]:
+    """Превращает сырую заметку из таблицы ("занятия; с 12.05") в заголовок+пояснение баннера."""
+    match = _NOTE_TIME_RE.search(note)
+    if match:
+        hh, mm = match.groups()
+        title = "Возможно, изменено время начала пары"
+        detail = f"В расписании есть пометка «{note}» — вероятно, приходить нужно к {hh}:{mm}."
+    else:
+        title = "Заметка в расписании"
+        detail = note
+    return title, detail
 
 
 def _split_lesson_lines(lesson: Lesson) -> tuple[str, list[str]]:
@@ -178,9 +197,17 @@ def _build_group_image(day: DaySchedule, shift: ShiftSchedule, group: GroupSched
     content_width = _WIDTH - 2 * _MARGIN - 2 * _CARD_PAD
     blocks = _measure_lesson_block_height(scratch_draw, group, content_width)
 
+    note_title: str | None = None
+    note_lines: list[str] = []
+    banner_h = 0
+    if group.note:
+        note_title, note_detail = _format_note(group.note)
+        note_lines = _wrap_text(scratch_draw, note_detail, _f_regular(17), content_width - 56, max_lines=2)
+        banner_h = 16 + 24 + 6 + len(note_lines) * 24 + 16
+
     header_h = 210
     title_block_h = 130
-    card_header_h = 130
+    card_header_h = 130 if not group.note else 144 + banner_h
     row_heights = []
     for _lesson, subject_lines, detail_lines in blocks:
         text_h = len(subject_lines) * 32 + (len(detail_lines) * 26 if detail_lines else 0)
@@ -255,6 +282,30 @@ def _build_group_image(day: DaySchedule, shift: ShiftSchedule, group: GroupSched
     draw.text((mx + (meta_w - draw.textlength(start_time, font=meta_value_font)), my), start_time, font=meta_value_font, fill=_ACCENT)
     my += 40
     draw.text((mx + (meta_w - draw.textlength(meta_lines[2], font=meta_label_font)), my), meta_lines[2], font=meta_label_font, fill=_TEXT_MUTED)
+
+    if note_title is not None:
+        banner_top = card_top + 124
+        draw.rounded_rectangle(
+            [cx, banner_top, _WIDTH - _MARGIN - _CARD_PAD, banner_top + banner_h],
+            radius=14,
+            fill=_WARN_BG,
+            outline=_WARN_BORDER,
+            width=2,
+        )
+        icon_cx, icon_cy = cx + 16 + 11, banner_top + 16 + 11
+        draw.polygon(
+            [(icon_cx, icon_cy - 11), (icon_cx - 10, icon_cy + 9), (icon_cx + 10, icon_cy + 9)],
+            outline=_WARN_ACCENT,
+            width=2,
+        )
+        draw.text((icon_cx - 1.5, icon_cy - 2), "!", font=_f_bold(13), fill=_WARN_ACCENT)
+        text_x = cx + 44
+        text_y = banner_top + 16
+        draw.text((text_x, text_y), note_title, font=_f_bold(19), fill=_WARN_ACCENT)
+        text_y += 24 + 6
+        for line in note_lines:
+            draw.text((text_x, text_y), line, font=_f_regular(17), fill=_WARN_TEXT)
+            text_y += 24
 
     row_y = card_top + card_header_h
     draw.line([(cx, row_y), (_WIDTH - _MARGIN - _CARD_PAD, row_y)], fill=_DIVIDER, width=2)

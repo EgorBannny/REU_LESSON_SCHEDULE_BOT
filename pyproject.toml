@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.31.0",
+    "asyncpg>=0.31.0",
     "beautifulsoup4>=4.15.0",
     "httpx>=0.28.1",
     "lxml>=6.1.3",
