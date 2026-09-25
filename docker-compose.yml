@@ -35,8 +35,6 @@ services:
       NOTIFY_INTERVAL_SECONDS: ${NOTIFY_INTERVAL_SECONDS:-60}
       NOTIFY_LOOKBACK_DAYS: ${NOTIFY_LOOKBACK_DAYS:-2}
     depends_on:
-      vless_vpn:
-        condition: service_started
       db:
         condition: service_healthy
     network_mode: "service:vless_vpn"
