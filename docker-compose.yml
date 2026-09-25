@@ -37,7 +37,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    network_mode: "service:vless_vpn"
     restart: unless-stopped
 
 volumes:
